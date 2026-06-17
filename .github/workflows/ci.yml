@@ -10,7 +10,7 @@ env:
   ECR_REPOSITORY: my-cicd-demo
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,28 +29,32 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build Docker image
-        run: docker build -t my-cicd-demo:${{ github.sha }} .
+        run: |
+          docker build -t $ECR_REPOSITORY:${{ github.sha }} .
 
       - name: Tag Docker image
         run: |
-          docker tag my-cicd-demo:${{ github.sha }} \
-          ${{ steps.login-ecr.outputs.registry }}/my-cicd-demo:${{ github.sha }}
+          docker tag $ECR_REPOSITORY:${{ github.sha }} \
+          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }}
 
       - name: Push Docker image to ECR
         run: |
           docker push \
-          ${{ steps.login-ecr.outputs.registry }}/my-cicd-demo:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }}
 
-                - name: Deploy to EC2
+      - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 596234624782.dkr.ecr.us-east-1.amazonaws.com
+            aws ecr get-login-password --region us-east-1 | \
+            docker login --username AWS --password-stdin \
+            596234624782.dkr.ecr.us-east-1.amazonaws.com
 
-            docker pull 596234624782.dkr.ecr.us-east-1.amazonaws.com/my-cicd-demo:${{ github.sha }}
+            docker pull \
+            596234624782.dkr.ecr.us-east-1.amazonaws.com/my-cicd-demo:${{ github.sha }}
 
             docker stop myapp-demo || true
             docker rm myapp-demo || true
@@ -58,4 +62,4 @@ jobs:
             docker run -d \
               --name myapp-demo \
               -p 3000:3000 \
-          596234624782.dkr.ecr.us-east-1.amazonaws.com/my-cicd-demo:${{ github.sha }}
+              596234624782.dkr.ecr.us-east-1.amazonaws.com/my-cicd-demo:${{ github.sha }}
